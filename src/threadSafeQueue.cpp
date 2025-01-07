@@ -1,48 +1,57 @@
 #include "threadSafeQueue.h"
-#include<iostream>
-template <typename T>
-std::atomic_int32_t thread_safe_queue<T>::release_cnt;
 
 template <typename T>
-void thread_safe_queue<T>::push_back(const T & data)
+thread_safe_queue<T>::thread_safe_queue()
+:head(new node),tail(head.get())
+{
+}
+
+template <typename T>
+void thread_safe_queue<T>::push_back(T&& data)
+{ 
+    {
+        auto p = std::make_unique<node>();
+        auto new_tail = p.get();
+        std::lock_guard<std::mutex> lock_tail(mtx_tail);
+        tail->data = std::move(data);
+        tail->next = std::move(p);
+        tail = new_tail;
+    }
+    cv.notify_one();
+}
+
+template <typename T>
+void thread_safe_queue<T>::push_back(const T &data)
 {
     {
-        auto temp = std::make_unique<node>(data);
-        std::lock(mtx_head,mtx_tail);
-        std::lock_guard<std::mutex> lock_head(mtx_head,std::adopt_lock);
-        std::lock_guard<std::mutex> lock_tail(mtx_tail,std::adopt_lock);
-        if(empty()){
-            head = std::move(temp);
-            tail = head.get();
-            cv.notify_one();
-        } else {
-            tail->next = std::move(temp);
-            tail = tail->next.get(); 
-        }
+        auto p = std::make_unique<node>();
+        auto new_tail = p.get();
+        std::lock_guard<std::mutex> lock_tail(mtx_tail);
+        tail->data = data;
+        tail->next = std::move(p);
+        tail = new_tail;
     }
-    std::cout<<"in:"<<data<<"\n";
-    
-    
+    cv.notify_one();
 }
 
 template <typename T>
 T thread_safe_queue<T>::pop_front()
 {
-    std::unique_lock<std::mutex> lock(mtx_head);
-    cv.wait(lock,[=](){return !empty();});
-    T ret = head->data;
-    
-    auto p = head->next.release();
-    head.reset(p);
-    
-    std::cout<<"out:"<<ret<<"  next:"<<(head?head->data:-1)<<"\n";
-    return ret;
+    std::unique_lock<std::mutex> lock_head(mtx_head);
+    cv.wait(lock_head,[this](){
+        return !this->empty();
+    });
+    T ret = std::move(head->data);
+    head.reset(head->next.release());
+    return ret; 
 }
 
 template <typename T>
 inline bool thread_safe_queue<T>::empty()
 {
-    return !head;
+    std::lock_guard<std::mutex> lock_tail(mtx_tail);
+    return head.get()==tail;
 }
 
 template class thread_safe_queue<std::string>;
+template class thread_safe_queue<int>;
