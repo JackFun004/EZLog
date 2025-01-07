@@ -49,7 +49,7 @@ T thread_safe_queue<T>::pop_front()
 template <typename T>
 inline bool thread_safe_queue<T>::empty()
 {
-    std::lock_guard<std::mutex> lock_tail(mtx_tail);
+    // std::lock_guard<std::mutex> lock_tail(mtx_tail);
     return head.get()==tail;
 }
 
