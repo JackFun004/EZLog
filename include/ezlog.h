@@ -7,12 +7,19 @@
 
 class EZLog{
 public:
+    using Config = std::uint8_t;
+    static constexpr Config log_all_on_exit = 1;//ezlog析构前，将消息队列中所有内容输出到目标文件
+    static constexpr Config log_console = 1<<1;//消息同时打印到标准输出流
+    static constexpr Config console_only = 1<<2;//消息仅打印到标准输出流
+
     enum class Level{
         Info,Debug,Warning,Error
     };
     enum class Resolution{
         Second,MilliSecond,MicroSecond
     };
+public:
+   
 
     class log{
         friend class EZLog;
@@ -29,6 +36,8 @@ private:
     thread_safe_queue<std::string> queue;
     std::thread consumer;
     void task();
+    bool check_if_empty_exit;
+    
 private:
     EZLog();
     ~EZLog();
@@ -47,11 +56,13 @@ private:
     Level default_level; 
     std::string output_file;
     Resolution time_resolution;
+    Config config;
 public:
     //interfaces
     static void set_default_level(Level level);
     static void set_output_file(std::string file);
     static void set_time_resolution(Resolution resolution);
+    static void set_config(Config config);
 
     static log ezlog(Level level);
     static log ezlog();

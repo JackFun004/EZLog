@@ -2,23 +2,35 @@
 #include<chrono>
 #include<ctime>
 #include<functional>
+#include<iostream>
 
 void EZLog::task()
 {
     while(true){
         std::string message =  queue.pop_front();
-        {
-            std::lock_guard<std::mutex> lock(f_mutex);
-            //文件输出流关闭，任务结束
-            if(!ofs.is_open())
-                return;
-            ofs<<message<<"\n";
+        if(check_if_empty_exit&&queue.empty())
+            return;
+        if(config&console_only){
+            std::cout<<message<<"\n";
+        } else {
+            if(config&log_console)
+                std::cout<<message<<"\n";
+            {
+                std::lock_guard<std::mutex> lock(f_mutex);
+                //文件输出流关闭，任务结束
+                if(!ofs.is_open())
+                    return;
+                ofs<<message<<"\n";
+            }
         }
     }
 }
 
 EZLog::EZLog()
-:default_level(EZLog::Level::Info),time_resolution(EZLog::Resolution::MilliSecond)
+:check_if_empty_exit(false),
+default_level(EZLog::Level::Info),
+time_resolution(EZLog::Resolution::MilliSecond),
+config(0)
 {
     //根据时间创建日志文件
     auto now = std::chrono::system_clock::now();
@@ -36,14 +48,28 @@ EZLog::EZLog()
 
 EZLog::~EZLog()
 {
-    {
-        std::lock_guard<std::mutex> lock(f_mutex);
-        if(ofs.is_open())
-            ofs.close();
+    if(config&log_all_on_exit){
+
+        check_if_empty_exit = true;
+        queue.push_back("ignore");//队列无消息，写入线程pop会阻塞，故有此操作
+        if(consumer.joinable())
+            consumer.join();
+        {
+            std::lock_guard<std::mutex> lock(f_mutex);
+            if(ofs.is_open())
+                ofs.close();
+        }
+    } else {
+        {
+            std::lock_guard<std::mutex> lock(f_mutex);
+            if(ofs.is_open())
+                ofs.close();
+        }
+        queue.push_back("ignore");//队列无消息，写入线程pop会阻塞，故有此操作
+        if(consumer.joinable())
+            consumer.join();
     }
-    queue.push_back("ignore");//队列无消息，写入线程pop会阻塞，故有此操作
-    if(consumer.joinable())
-        consumer.join();
+    
 }
 
 EZLog &EZLog::singleton()
@@ -92,7 +118,7 @@ void EZLog::set_output_file(std::string file)
         return;
     std::ofstream n_ofs(file,std::ios_base::out|std::ios_base::app);
     if(!n_ofs){
-        
+        std::cerr<<"specified file "<<file<<" open failed\n";
         return;
     }
     std::lock_guard<std::mutex> lock(obj.f_mutex);
@@ -105,6 +131,11 @@ void EZLog::set_output_file(std::string file)
 void EZLog::set_time_resolution(Resolution resolution)
 {
     singleton().time_resolution = resolution;
+}
+
+void EZLog::set_config(Config config)
+{
+    singleton().config = config;
 }
 
 EZLog::log EZLog::ezlog(Level level)
