@@ -28,9 +28,8 @@ void EZLog::task()
 
 EZLog::EZLog()
 :check_if_empty_exit(false),
-default_level(EZLog::Level::Info),
 time_resolution(EZLog::Resolution::MilliSecond),
-config(0)
+config(show_function|show_tid)
 {
     //根据时间创建日志文件
     auto now = std::chrono::system_clock::now();
@@ -106,10 +105,6 @@ inline std::string EZLog::now(EZLog::Resolution res)
 }
 
 
-void EZLog::set_default_level(Level level)
-{
-    singleton().default_level = level;
-}
 
 void EZLog::set_output_file(std::string file)
 {
@@ -138,62 +133,79 @@ void EZLog::set_config(Config config)
     singleton().config = config;
 }
 
-EZLog::log EZLog::ezlog(Level level)
+EZLog::log EZLog::ezlog(Level level,const char* func,const char* file,uint32_t line)
 {
-    return log(level);
+    return log(level,func,file,line);
 }
-
-EZLog::log EZLog::ezlog()
-{
-    return log(singleton().default_level);
-}
-
-EZLog::log EZLog::info()
-{
-    return log(EZLog::Level::Info);
-}
-
-EZLog::log EZLog::debug()
-{
-    return log(EZLog::Level::Debug);
-}
-
-EZLog::log EZLog::warning()
-{
-    return log(EZLog::Level::Warning);
-}
-
-EZLog::log EZLog::error()
-{
-    return log(EZLog::Level::Error);
-}
-
-EZLog::log::log(EZLog::Level l)
+EZLog::log::log(EZLog::Level l,const char* func,const char* file = nullptr,uint32_t line = 0)
 :level(l)
 {
+    EZLog::Config config = singleton().config;
+
     std::string pre_msg = now(singleton().time_resolution);
     switch (level)
     {
     case Level::Info:
         pre_msg += "[info]";
         break;
+#ifdef DEBUG
     case Level::Debug:
         pre_msg += "[debug]";
         break;
+#endif
     case Level::Warning:
         pre_msg += "[warning]";
         break;
     case Level::Error:
         pre_msg += "[error]";
         break;
+    case Level::Fatal:
+        pre_msg += "[fatal]";
+        break;
     default:
         pre_msg += "[unknown]";
         break;
     }
+    if(config&show_function){
+        pre_msg += "in ";
+        pre_msg += func;
+    }
+    if(config&show_file){
+        pre_msg += "(file:";
+        pre_msg += file;
+        pre_msg += ",line:";
+        pre_msg += std::to_string(line);
+        pre_msg += ")";
+    }
+
     ss<<pre_msg;
+    if(config&show_tid){
+        ss<<"[tid"<<std::this_thread::get_id()<<"]:";
+    }
     
 }
 EZLog::log::~log()
 {
+    if(level==Level::Fatal){
+        EZLog& obj = EZLog::singleton();
+        Config config = obj.config;
+        if(config&console_only){
+            std::cerr<<ss.str()<<'\n';
+            exit(-1);
+        }
+        {
+            std::lock_guard<std::mutex> lock(obj.f_mutex);
+            //文件输出流关闭，任务结束
+            if(obj.ofs.is_open()){
+                obj.ofs<<ss.str()<<"\n";
+                if(config&log_console)
+                    std::cerr<<ss.str()<<'\n';
+            }else{
+                std::cerr<<ss.str()<<'\n';
+            }
+            
+        }
+        exit(-1);
+    }
     singleton().queue.push_back(ss.str());
 }

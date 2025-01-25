@@ -4,18 +4,18 @@
 int main(){
 
     std::thread thread1([=](){
-        for(int i=0;i<100;i++){
-            EZLog::info()<<"info "<<i;
+        for(int i=0;i<1000;i++){
+            EZ_INFO()<<"info "<<i;
         }
     });
     std::thread thread2([=](){
-        for(int i=0;i<100;i++){
-            EZLog::debug()<<"debug "<<i;
+        for(int i=0;i<1000;i++){
+            EZ_DEBUG()<<"debug "<<i;
         }
     });
     std::thread thread3([=](){
-        for(int i=0;i<100;i++){
-            EZLog::error()<<"error "<<i;
+        for(int i=0;i<1000;i++){
+            EZ_ERR()<<"error "<<i;
         }
     });
 
@@ -23,24 +23,28 @@ int main(){
     thread2.join();
     thread3.join();
 
-    EZLog::set_default_level(EZLog::Level::Debug);
     EZLog::set_output_file("specified.log");
     EZLog::set_time_resolution(EZLog::Resolution::MicroSecond);
+
     std::thread thread4([=](){
-        for(int i=0;i<100;i++){
-            EZLog::ezlog()<<"info "<<i;
+        for(int i=0;i<1000;i++){
+            EZ_INFO()<<"info "<<i;
         }
     });
     std::thread thread5([=](){
-        for(int i=0;i<100;i++){
-            EZLog::ezlog(EZLog::Level::Warning)<<"warning "<<i;
+        for(int i=0;i<1000;i++){
+            EZ_DEBUG()<<"debug "<<i;
         }
     });
     std::thread thread6([=](){
-        for(int i=0;i<100;i++){
-            EZLog::error()<<"error "<<i;
+        for(int i=0;i<1000;i++){
+            EZ_ERR()<<"error "<<i;
         }
     });
+
+    EZ_FATAL()<<"a fatal occurs and makes the system crashed";
+
+    std::cout<<"after_fatal";
 
     thread4.join();
     thread5.join();
